@@ -1,0 +1,78 @@
+name: Terraform setup
+description: >
+  Install Terraform, optionally export secrets/vars and assume the AWS deployment
+  role (via aws-env), then run terraform init.
+
+inputs:
+  working-directory:
+    description: Terraform root module.
+    required: false
+    default: "."
+  terraform-version:
+    description: Terraform version.
+    required: false
+    default: "1.9.8"
+  cloud-auth:
+    description: Export secrets/vars and assume the AWS role. Set "false" for offline checks.
+    required: false
+    default: "true"
+  secrets-json:
+    description: "Pass `toJson(secrets)`."
+    required: false
+    default: "{}"
+  vars-json:
+    description: "Pass `toJson(vars)`."
+    required: false
+    default: "{}"
+  role-arn:
+    description: IAM role to assume (usually vars.DEPLOYMENT_ROLE_ARN).
+    required: false
+    default: ""
+  region:
+    description: AWS region (usually vars.AWS_DEFAULT_REGION).
+    required: false
+    default: ""
+  role-session-name:
+    description: STS session name.
+    required: false
+    default: github-actions
+  init:
+    description: 'Init mode: "backend" (normal), "no-backend" (validate only) or "none".'
+    required: false
+    default: backend
+  init-args:
+    description: Extra arguments for terraform init (e.g. -backend-config=backend.hcl).
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd  # v3.1.2
+      with:
+        terraform_version: ${{ inputs.terraform-version }}
+        terraform_wrapper: false
+
+    - name: AWS environment
+      if: inputs.cloud-auth == 'true'
+      uses: YOUR_ORG/shared-workflows/actions/aws-env@v1
+      with:
+        secrets-json: ${{ inputs.secrets-json }}
+        vars-json: ${{ inputs.vars-json }}
+        role-arn: ${{ inputs.role-arn }}
+        region: ${{ inputs.region }}
+        role-session-name: ${{ inputs.role-session-name }}
+
+    - name: Terraform Init
+      if: inputs.init != 'none'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        INIT_MODE: ${{ inputs.init }}
+        INIT_ARGS: ${{ inputs.init-args }}
+      run: |
+        args=(-no-color -input=false)
+        [[ "$INIT_MODE" == "no-backend" ]] && args+=(-backend=false)
+        # shellcheck disable=SC2086  # INIT_ARGS is intentionally word-split
+        terraform init "${args[@]}" $INIT_ARGS
