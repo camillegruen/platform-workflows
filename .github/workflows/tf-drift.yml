@@ -1,0 +1,120 @@
+name: Terraform Drift Reusable Workflow
+
+permissions:
+  id-token: write
+  contents: read
+  issues: write
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      working-directory:
+        required: false
+        type: string
+        default: "."
+      role-session-name:
+        required: false
+        type: string
+        default: ${{ github.event.repository.name }}-session
+      terraform-version:
+        required: false
+        type: string
+        default: "1.9.8"
+      init-args:
+        required: false
+        type: string
+      plan-args:
+        required: false
+        type: string
+      issue-label:
+        required: false
+        type: string
+        default: drift
+    outputs:
+      drift:
+        description: "'true' if drift was found."
+        value: ${{ jobs.terraform-drift.outputs.drift }}
+
+jobs:
+  terraform-drift:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    outputs:
+      drift: ${{ steps.plan.outputs.drift }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Terraform setup
+        uses: YOUR_ORG/shared-workflows/actions/tf-setup@v1
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          terraform-version: ${{ inputs.terraform-version }}
+          secrets-json: ${{ toJson(secrets) }}
+          vars-json: ${{ toJson(vars) }}
+          role-arn: ${{ vars.DEPLOYMENT_ROLE_ARN }}
+          region: ${{ vars.AWS_REGION }}
+          role-session-name: ${{ inputs.role-session-name }}
+          init-args: ${{ inputs.init-args }}
+
+      - name: Terraform Plan (drift check)
+        id: plan
+        env:
+          PLAN_ARGS: ${{ inputs.plan-args }}
+        run: |
+          set +e
+          # shellcheck disable=SC2086  # PLAN_ARGS is intentionally word-split
+          terraform plan -no-color -input=false -lock=false -detailed-exitcode $PLAN_ARGS > plan.txt 2>&1
+          code=$?
+          set -e
+          cat plan.txt
+          case $code in
+            0) echo "drift=false" >> "$GITHUB_OUTPUT" ;;
+            2) echo "drift=true"  >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::terraform plan failed"; exit 1 ;;
+          esac
+
+      - name: Open, update or close drift issue
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
+        env:
+          DRIFT: ${{ steps.plan.outputs.drift }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          WORKDIR: ${{ inputs.working-directory }}
+          LABEL: ${{ inputs.issue-label }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const { DRIFT, ENVIRONMENT: env, WORKDIR: dir, LABEL: label } = process.env;
+            const title = `Terraform drift: ${env} (${dir})`;
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              ...context.repo, state: 'open', labels: label, per_page: 100,
+            });
+            const existing = issues.find(i => i.title === title);
+
+            if (DRIFT === 'true') {
+              let plan = fs.readFileSync(path.join(dir, 'plan.txt'), 'utf8');
+              if (plan.length > 60000) plan = plan.substring(0, 60000) + '\n... (truncated)';
+              const body = `Drift found by [this run](${runUrl}).\n\n<details><summary>Plan</summary>\n\n\`\`\`hcl\n${plan}\n\`\`\`\n</details>`;
+              if (existing) {
+                await github.rest.issues.update({ ...context.repo, issue_number: existing.number, body });
+              } else {
+                await github.rest.issues.create({ ...context.repo, title, body, labels: [label] });
+              }
+              core.warning(`Drift detected in ${env} (${dir})`);
+            } else if (existing) {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: existing.number,
+                body: `No drift as of [this run](${runUrl}). Closing.` });
+              await github.rest.issues.update({ ...context.repo, issue_number: existing.number, state: 'closed' });
+            }

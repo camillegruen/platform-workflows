@@ -1,0 +1,73 @@
+name: Terraform Apply Reusable Workflow
+# Plan + apply in one job. Add "Required reviewers" to the GitHub environment
+# to get a manual approval gate before this job starts.
+
+permissions:
+  id-token: write
+  contents: read
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      working-directory:
+        required: false
+        type: string
+        default: "."
+      role-session-name:
+        required: false
+        type: string
+        default: ${{ github.event.repository.name }}-session
+      terraform-version:
+        required: false
+        type: string
+        default: "1.9.8"
+      init-args:
+        required: false
+        type: string
+        description: "Additional arguments passed to `terraform init`"
+      plan-args:
+        required: false
+        type: string
+        description: "Additional arguments passed to `terraform plan`"
+
+jobs:
+  terraform-apply:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    concurrency:
+      # One apply per state at a time; never cancel an apply mid-run.
+      group: tf-apply-${{ inputs.environment }}-${{ inputs.working-directory }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Terraform setup
+        uses: YOUR_ORG/shared-workflows/actions/tf-setup@v1
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          terraform-version: ${{ inputs.terraform-version }}
+          secrets-json: ${{ toJson(secrets) }}
+          vars-json: ${{ toJson(vars) }}
+          role-arn: ${{ vars.DEPLOYMENT_ROLE_ARN }}
+          region: ${{ vars.AWS_REGION }}
+          role-session-name: ${{ inputs.role-session-name }}
+          init-args: ${{ inputs.init-args }}
+
+      - name: Terraform Plan
+        env:
+          PLAN_ARGS: ${{ inputs.plan-args }}
+        run: |
+          # shellcheck disable=SC2086  # PLAN_ARGS is intentionally word-split
+          terraform plan -no-color -input=false -lock-timeout=5m -out tfplan $PLAN_ARGS
+
+      - name: Terraform Apply
+        run: terraform apply -no-color -input=false -lock-timeout=5m tfplan

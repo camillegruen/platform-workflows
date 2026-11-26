@@ -1,0 +1,85 @@
+name: Terraform Plan Reusable Workflow
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      working-directory:
+        required: false
+        type: string
+        default: "."
+      role-session-name:
+        required: false
+        type: string
+        default: ${{ github.event.repository.name }}-session
+      terraform-version:
+        required: false
+        type: string
+        default: "1.9.8"
+      init-args:
+        required: false
+        type: string
+        description: "Additional arguments passed to `terraform init`"
+      plan-args:
+        required: false
+        type: string
+        description: "Additional arguments passed to `terraform plan`"
+
+jobs:
+  terraform-plan:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    concurrency:
+      group: tf-plan-${{ inputs.environment }}-${{ inputs.working-directory }}-${{ github.ref }}
+      cancel-in-progress: true
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Terraform setup
+        uses: YOUR_ORG/shared-workflows/actions/tf-setup@v1
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          terraform-version: ${{ inputs.terraform-version }}
+          secrets-json: ${{ toJson(secrets) }}
+          vars-json: ${{ toJson(vars) }}
+          role-arn: ${{ vars.DEPLOYMENT_ROLE_ARN }}
+          region: ${{ vars.AWS_REGION }}
+          role-session-name: ${{ inputs.role-session-name }}
+          init-args: ${{ inputs.init-args }}
+
+      - name: Terraform Plan
+        id: terraform-plan
+        continue-on-error: true  # so the PR comment can show failures; job is failed below
+        env:
+          PLAN_ARGS: ${{ inputs.plan-args }}
+        run: |
+          # shellcheck disable=SC2086  # PLAN_ARGS is intentionally word-split
+          terraform plan -no-color -input=false -lock-timeout=5m -out tfplan $PLAN_ARGS 2>&1 | tee plan.txt
+          terraform show -no-color tfplan > plan.txt
+
+      - name: Post Plan to PR
+        if: always() && github.event_name == 'pull_request'
+        uses: YOUR_ORG/shared-workflows/actions/pr-comment@v1
+        with:
+          title: Terraform Plan
+          file: ${{ inputs.working-directory }}/plan.txt
+          outcome: ${{ steps.terraform-plan.outcome }}
+          language: hcl
+          key: ${{ inputs.environment }}:${{ inputs.working-directory }}
+
+      - name: Fail if plan failed
+        if: steps.terraform-plan.outcome == 'failure'
+        run: exit 1
