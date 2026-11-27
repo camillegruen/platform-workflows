@@ -56,7 +56,7 @@ runs:
 
     - name: AWS environment
       if: inputs.cloud-auth == 'true'
-      uses: YOUR_ORG/shared-workflows/actions/aws-env@v1
+      uses: YOUR_ORG/platform-workflows/actions/aws-env@v1
       with:
         secrets-json: ${{ inputs.secrets-json }}
         vars-json: ${{ inputs.vars-json }}

@@ -31,7 +31,7 @@ The `tf-setup` composite action installs Terraform, optionally runs `aws-env` to
 ```yaml
 steps:
   - uses: actions/checkout@<sha>  # v6.0.2
-  - uses: YOUR_ORG/shared-workflows/actions/tf-setup@v1
+  - uses: YOUR_ORG/platform-workflows/actions/tf-setup@v1
     with:
       working-directory: infra
       secrets-json: ${{ toJson(secrets) }}

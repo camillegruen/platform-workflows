@@ -1,4 +1,4 @@
-# shared-workflows
+# platform-workflows
 
 A collection of GitHub Actions workflows and composite actions built up over time across projects and gathered here in one place.
 
@@ -11,25 +11,40 @@ When you write something another repo could use, add it here: as a reusable work
 ## Repo layout
 
 ```
-shared-workflows/
-├── .github/
-│   ├── workflows/            # reusable workflows (flat; GitHub doesn't allow subfolders)
-│   │   ├── tf-*.yml          # Terraform: validate, plan, apply, drift
-│   │   ├── cdk-diff.yml      # AWS CDK
-│   │   ├── pr-validation.yml # PR hygiene
-│   │   ├── build-*.yml       # app CI: node, python, docker
-│   │   └── _*.yml            # internal to this repo (underscore = not for reuse)
-│   └── dependabot.yml
-├── actions/                  # composite actions = repeated step sequences
-│   ├── tf-setup/
-│   ├── aws-env/
-│   └── pr-comment/
-├── docs/
-│   ├── <name>-workflow-usage.md
-│   ├── <name>-action-usage.md
-│   └── examples/             # ready-to-copy caller workflows
-├── .yamllint
-└── README.md
+platform-workflows/
+├── README.md
+├── actions
+│   ├── aws-env
+│   │   └── action.yml
+│   ├── pr-comment
+│   │   └── action.yml
+│   └── tf-setup
+│       └── action.yml
+└── docs
+    ├── aws-env-action-usage.md
+    ├── build-docker-workflow-usage.md
+    ├── build-node-workflow-usage.md
+    ├── build-python-workflow-usage.md
+    ├── cdk-diff-workflow-usage.md
+    ├── examples
+    │   ├── auto_assign.yml
+    │   ├── build-docker-example.yml
+    │   ├── build-node-example.yml
+    │   ├── build-python-example.yml
+    │   ├── cdk-diff-example.yml
+    │   ├── pr-validation-example.yml
+    │   ├── terraform-pipeline-example.yml
+    │   ├── tf-apply-example.yml
+    │   ├── tf-drift-example.yml
+    │   ├── tf-plan-example.yml
+    │   └── tf-validate-example.yml
+    ├── pr-comment-action-usage.md
+    ├── pr-validation-workflow-usage.md
+    ├── tf-apply-workflow-usage.md
+    ├── tf-drift-workflow-usage.md
+    ├── tf-plan-workflow-usage.md
+    ├── tf-setup-action-usage.md
+    └── tf-validate-workflow-usage.md
 ```
 
 ---
@@ -89,7 +104,7 @@ Minimal example:
 ```yaml
 jobs:
   plan:
-    uses: YOUR_ORG/shared-workflows/.github/workflows/tf-plan.yml@v1
+    uses: YOUR_ORG/platform-workflows/.github/workflows/tf-plan.yml@v1
     permissions: { id-token: write, contents: read, pull-requests: write }
     secrets: inherit
     with:
@@ -124,7 +139,7 @@ jobs:
 
 - **Reusable workflows** go directly in `.github/workflows/`. Group them with a name prefix (`tf-*`, `build-*`), and prefix internal ones with `_`.
 - **Repeated step sequences** go in `actions/<name>/action.yml`.
-- **Inside reusable workflows, reference composite actions by full path:** `YOUR_ORG/shared-workflows/actions/<name>@v1`. A `./` path resolves against the *caller's* repo and will break.
+- **Inside reusable workflows, reference composite actions by full path:** `YOUR_ORG/platform-workflows/actions/<name>@v1`. A `./` path resolves against the *caller's* repo and will break.
 - **Pin third-party actions to a commit SHA** with a version comment, e.g. `uses: actions/checkout@<sha>  # v6.0.2`. Dependabot updates both together.
 - **Never put `${{ inputs.* }}` directly into `run:` or `script:`.** Pass values through `env:` to avoid script injection.
 - **For anything new,** add a `docs/<name>-workflow-usage.md` page (or `-action-usage.md`), an example in `docs/examples/<name>-example.yml`, and a row in the tables above. Follow the existing pages: Overview, Features, Inputs, Permissions, Usage.

@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    uses: YOUR_ORG/shared-workflows/.github/workflows/build-node.yml@v1
+    uses: YOUR_ORG/platform-workflows/.github/workflows/build-node.yml@v1
     with:
       node-versions: '["20", "22"]'
       package-manager: npm 

@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         environment: [dev, prod]
-    uses: YOUR_ORG/shared-workflows/.github/workflows/cdk-diff.yml@v1
+    uses: YOUR_ORG/platform-workflows/.github/workflows/cdk-diff.yml@v1
     permissions:
       id-token: write
       contents: read

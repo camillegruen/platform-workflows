@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   apply:
-    uses: YOUR_ORG/shared-workflows/.github/workflows/tf-apply.yml@v1
+    uses: YOUR_ORG/platform-workflows/.github/workflows/tf-apply.yml@v1
     permissions:
       id-token: write
       contents: read

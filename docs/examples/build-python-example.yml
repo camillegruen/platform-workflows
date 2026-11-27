@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    uses: YOUR_ORG/shared-workflows/.github/workflows/build-python.yml@v1
+    uses: YOUR_ORG/platform-workflows/.github/workflows/build-python.yml@v1
     with:
       python-versions: '["3.12", "3.13"]'
       install-command: pip install -r requirements.txt -r requirements-dev.txt

@@ -30,7 +30,7 @@ steps:
     continue-on-error: true
     run: my-tool 2>&1 | tee output.txt
   - if: always() && github.event_name == 'pull_request'
-    uses: YOUR_ORG/shared-workflows/actions/pr-comment@v1
+    uses: YOUR_ORG/platform-workflows/actions/pr-comment@v1
     with:
       title: My Tool
       file: output.txt

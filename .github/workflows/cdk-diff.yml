@@ -57,7 +57,7 @@ jobs:
 
       # Before installing dependencies so private-index credentials etc. are available
       - name: AWS environment
-        uses: YOUR_ORG/shared-workflows/actions/aws-env@v1
+        uses: YOUR_ORG/platform-workflows/actions/aws-env@v1
         with:
           secrets-json: ${{ toJson(secrets) }}
           vars-json: ${{ toJson(vars) }}
@@ -89,7 +89,7 @@ jobs:
 
       - name: Post Diff to PR
         if: always() && github.event_name == 'pull_request'
-        uses: YOUR_ORG/shared-workflows/actions/pr-comment@v1
+        uses: YOUR_ORG/platform-workflows/actions/pr-comment@v1
         with:
           title: CDK Diff
           file: ${{ inputs.working-directory }}/diff.txt

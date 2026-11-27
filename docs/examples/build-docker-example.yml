@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   docker:
-    uses: YOUR_ORG/shared-workflows/.github/workflows/build-docker.yml@v1
+    uses: YOUR_ORG/platform-workflows/.github/workflows/build-docker.yml@v1
     permissions:
       contents: read
       packages: write

@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   validate:
-    uses: YOUR_ORG/shared-workflows/.github/workflows/tf-validate.yml@v1
+    uses: YOUR_ORG/platform-workflows/.github/workflows/tf-validate.yml@v1
     with:
       working-directory: infra
 
@@ -26,7 +26,7 @@ jobs:
     strategy:
       matrix:
         environment: [dev, prod]
-    uses: YOUR_ORG/shared-workflows/.github/workflows/tf-plan.yml@v1
+    uses: YOUR_ORG/platform-workflows/.github/workflows/tf-plan.yml@v1
     permissions:
       id-token: write
       contents: read
@@ -41,7 +41,7 @@ jobs:
   apply-dev:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: validate
-    uses: YOUR_ORG/shared-workflows/.github/workflows/tf-apply.yml@v1
+    uses: YOUR_ORG/platform-workflows/.github/workflows/tf-apply.yml@v1
     permissions:
       id-token: write
       contents: read
@@ -54,7 +54,7 @@ jobs:
 
   apply-prod:
     needs: apply-dev
-    uses: YOUR_ORG/shared-workflows/.github/workflows/tf-apply.yml@v1
+    uses: YOUR_ORG/platform-workflows/.github/workflows/tf-apply.yml@v1
     permissions:
       id-token: write
       contents: read

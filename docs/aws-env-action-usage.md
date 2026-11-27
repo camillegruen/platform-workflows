@@ -26,7 +26,7 @@ The `aws-env` composite action exports the caller's secrets and variables as env
 
 ```yaml
 steps:
-  - uses: YOUR_ORG/shared-workflows/actions/aws-env@v1
+  - uses: YOUR_ORG/platform-workflows/actions/aws-env@v1
     with:
       secrets-json: ${{ toJson(secrets) }}
       vars-json: ${{ toJson(vars) }}

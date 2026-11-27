@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   validate:
-    uses: YOUR_ORG/shared-workflows/.github/workflows/tf-validate.yml@v1
+    uses: YOUR_ORG/platform-workflows/.github/workflows/tf-validate.yml@v1
     with:
       working-directory: infra
       terraform-version: "1.9.8"
