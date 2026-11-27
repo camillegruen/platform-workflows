@@ -1,0 +1,116 @@
+# Requires: Settings → Actions → General → Workflow permissions →
+#   "Allow GitHub Actions to create and approve pull requests".
+name: Bump Terraform version
+
+on:
+  schedule:
+    - cron: "23 14 * * 1"  # Mondays 14:23 UTC
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to set (e.g. 1.14.2). Empty = latest stable release.
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: bump-terraform
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Find versions
+        id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED: ${{ inputs.version }}
+        run: |
+          # Current default = source of truth in the tf-setup action
+          current=$(yq '.inputs.terraform-version.default' actions/tf-setup/action.yml)
+
+          if [[ -n "$REQUESTED" ]]; then
+            latest="${REQUESTED#v}"
+          else
+            # releases/latest excludes pre-releases (alpha/beta/rc)
+            latest=$(gh api repos/hashicorp/terraform/releases/latest --jq '.tag_name')
+            latest="${latest#v}"
+          fi
+
+          if ! [[ "$current" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$latest" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Unexpected version format: current='$current' latest='$latest'"
+            exit 1
+          fi
+
+          newest=$(printf '%s\n%s\n' "$current" "$latest" | sort -V | tail -1)
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "latest=$latest"   >> "$GITHUB_OUTPUT"
+          if [[ "$current" == "$latest" || ( -z "$REQUESTED" && "$newest" == "$current" ) ]]; then
+            echo "update=false" >> "$GITHUB_OUTPUT"
+            echo "Terraform default $current is up to date."
+          else
+            echo "update=true" >> "$GITHUB_OUTPUT"
+            echo "Bumping Terraform default $current -> $latest"
+          fi
+
+      - name: Update files
+        if: steps.v.outputs.update == 'true'
+        env:
+          CURRENT: ${{ steps.v.outputs.current }}
+          LATEST: ${{ steps.v.outputs.latest }}
+        run: |
+          # Only the quoted form ("1.9.8") is replaced, and only in files that
+          # mention terraform-version, so unrelated version strings are untouched.
+          mapfile -t files < <(grep -rlF --include='*.yml' --include='*.md' \
+            "\"$CURRENT\"" .github/workflows actions docs \
+            | xargs grep -lE 'terraform-version|terraform_version')
+          for f in "${files[@]}"; do
+            sed -i "s/\"${CURRENT//./\\.}\"/\"$LATEST\"/g" "$f"
+            echo "updated $f"
+          done
+          git diff --stat
+
+      - name: Open or update PR
+        if: steps.v.outputs.update == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT: ${{ steps.v.outputs.current }}
+          LATEST: ${{ steps.v.outputs.latest }}
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          branch="chore/bump-terraform-$LATEST"
+
+          # Close bump PRs for older versions that are now superseded
+          gh pr list --state open --json number,headRefName \
+            --jq ".[] | select(.headRefName | startswith(\"chore/bump-terraform-\")) | select(.headRefName != \"$branch\") | .number" |
+          while read -r n; do
+            gh pr close "$n" --delete-branch --comment "Superseded by Terraform $LATEST."
+          done
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -am "chore: bump default Terraform $CURRENT -> $LATEST"
+          git push --force -u origin "$branch"
+
+          if gh pr view "$branch" >/dev/null 2>&1; then
+            echo "PR already open for $branch"
+          else
+            gh pr create --base "$BASE" --head "$branch" \
+              --title "chore: bump default Terraform $CURRENT -> $LATEST" \
+              --body "Bumps the default \`terraform-version\` in all workflows, actions, docs and examples.
+
+          - Release notes: https://github.com/hashicorp/terraform/releases/tag/v$LATEST
+          - Callers pinned to \`@v1\` get the new default after the next release tag. Callers that pass \`terraform-version\` explicitly are unaffected.
+
+          > PRs opened with \`GITHUB_TOKEN\` don't trigger other workflows. Close and reopen this PR to run CI.
+
+          _Opened by \`_bump-terraform.yml\`._"
+          fi

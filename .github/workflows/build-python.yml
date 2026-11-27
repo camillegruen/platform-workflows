@@ -1,0 +1,77 @@
+name: Build Python Reusable Workflow
+
+permissions:
+  contents: read
+
+on:
+  workflow_call:
+    inputs:
+      python-versions:
+        required: false
+        type: string
+        default: '["3.12"]'
+        description: JSON array of Python versions.
+      working-directory:
+        required: false
+        type: string
+        default: "."
+      install-command:
+        required: false
+        type: string
+        default: pip install -r requirements.txt
+        description: Command that installs the project and its test dependencies
+      run-lint:
+        required: false
+        type: boolean
+        default: true
+      test-command:
+        required: false
+        type: string
+        default: pytest -q
+
+jobs:
+  build-python:
+    name: Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ${{ fromJSON(inputs.python-versions) }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Setup Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: |
+            ${{ inputs.working-directory }}/**/requirements*.txt
+            ${{ inputs.working-directory }}/**/pyproject.toml
+
+      - name: Install Python Dependencies
+        env:
+          INSTALL_COMMAND: ${{ inputs.install-command }}
+        run: |
+          python -m pip install --upgrade pip ruff pytest
+          # shellcheck disable=SC2086  # INSTALL_COMMAND is intentionally word-split
+          $INSTALL_COMMAND
+
+      - name: Ruff
+        if: inputs.run-lint
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Test
+        env:
+          TEST_COMMAND: ${{ inputs.test-command }}
+        run: |
+          # shellcheck disable=SC2086  # TEST_COMMAND is intentionally word-split
+          $TEST_COMMAND

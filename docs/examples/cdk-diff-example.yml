@@ -1,0 +1,22 @@
+name: CDK
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  diff:
+    strategy:
+      matrix:
+        environment: [dev, prod]
+    uses: YOUR_ORG/shared-workflows/.github/workflows/cdk-diff.yml@v1
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    secrets: inherit
+    with:
+      environment: ${{ matrix.environment }}
+      install-command: pip install -r requirements.txt

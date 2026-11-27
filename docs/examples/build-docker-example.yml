@@ -1,0 +1,19 @@
+name: Docker
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  docker:
+    uses: YOUR_ORG/shared-workflows/.github/workflows/build-docker.yml@v1
+    permissions:
+      contents: read
+      packages: write
+    with:
+      push: ${{ github.event_name != 'pull_request' }}

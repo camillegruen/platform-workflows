@@ -1,0 +1,102 @@
+name: CDK Diff Reusable Workflow
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      role-session-name:
+        required: false
+        type: string
+        default: ${{ github.event.repository.name }}-session
+      working-directory:
+        required: false
+        type: string
+        default: "."
+      python-version:
+        required: false
+        type: string
+        default: "3.12"
+      install-command:
+        required: false
+        type: string
+        default: pip install -r requirements.txt
+        description: Command that installs the CDK app's Python dependencies
+      cdk-version:
+        required: false
+        type: string
+        default: latest
+
+jobs:
+  cdk-diff:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Setup Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: ${{ inputs.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            ${{ inputs.working-directory }}/**/requirements*.txt
+            ${{ inputs.working-directory }}/**/pyproject.toml
+
+      # Before installing dependencies so private-index credentials etc. are available
+      - name: AWS environment
+        uses: YOUR_ORG/shared-workflows/actions/aws-env@v1
+        with:
+          secrets-json: ${{ toJson(secrets) }}
+          vars-json: ${{ toJson(vars) }}
+          role-arn: ${{ vars.DEPLOYMENT_ROLE_ARN }}
+          region: ${{ vars.AWS_REGION }}
+          role-session-name: ${{ inputs.role-session-name }}
+
+      - name: Install Python Dependencies
+        env:
+          INSTALL_COMMAND: ${{ inputs.install-command }}
+        run: |
+          python -m pip install --upgrade pip
+          # shellcheck disable=SC2086  # INSTALL_COMMAND is intentionally word-split
+          $INSTALL_COMMAND
+
+      - name: Install CDK CLI
+        env:
+          CDK_VERSION: ${{ inputs.cdk-version }}
+        run: npm install -g "aws-cdk@${CDK_VERSION}"
+
+      - name: Setup deployment environment
+        uses: gha-workflows/.github/actions/version@main
+
+      - name: Run CDK Diff
+        id: cdk-diff
+        continue-on-error: true  # so the PR comment can show failures; job is failed below
+        # cdk writes the diff to stderr, so capture both streams
+        run: cdk diff 2>&1 | tee diff.txt
+
+      - name: Post Diff to PR
+        if: always() && github.event_name == 'pull_request'
+        uses: YOUR_ORG/shared-workflows/actions/pr-comment@v1
+        with:
+          title: CDK Diff
+          file: ${{ inputs.working-directory }}/diff.txt
+          outcome: ${{ steps.cdk-diff.outcome }}
+          language: diff
+          key: ${{ inputs.environment }}:${{ inputs.working-directory }}
+
+      - name: Fail if diff failed
+        if: steps.cdk-diff.outcome == 'failure'
+        run: exit 1

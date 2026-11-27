@@ -1,0 +1,66 @@
+# GitHub environments needed in your repo (Settings → Environments):
+#   dev, prod  → variables DEPLOYMENT_ROLE_ARN, AWS_REGION
+#   prod       → add "Required reviewers" to gate the apply
+name: Terraform
+
+on:
+  pull_request:
+    paths: ["infra/**", ".github/workflows/terraform.yml"]
+  push:
+    branches: [main]
+    paths: ["infra/**", ".github/workflows/terraform.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    uses: YOUR_ORG/shared-workflows/.github/workflows/tf-validate.yml@v1
+    with:
+      working-directory: infra
+
+  plan:
+    if: github.event_name == 'pull_request'
+    needs: validate
+    strategy:
+      matrix:
+        environment: [dev, prod]
+    uses: YOUR_ORG/shared-workflows/.github/workflows/tf-plan.yml@v1
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    secrets: inherit
+    with:
+      environment: ${{ matrix.environment }}
+      working-directory: infra
+      init-args: -backend-config=backend-${{ matrix.environment }}.hcl
+      plan-args: -var-file=${{ matrix.environment }}.tfvars
+
+  apply-dev:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: validate
+    uses: YOUR_ORG/shared-workflows/.github/workflows/tf-apply.yml@v1
+    permissions:
+      id-token: write
+      contents: read
+    secrets: inherit
+    with:
+      environment: dev
+      working-directory: infra
+      init-args: -backend-config=backend-dev.hcl
+      plan-args: -var-file=dev.tfvars
+
+  apply-prod:
+    needs: apply-dev
+    uses: YOUR_ORG/shared-workflows/.github/workflows/tf-apply.yml@v1
+    permissions:
+      id-token: write
+      contents: read
+    secrets: inherit
+    with:
+      environment: prod
+      working-directory: infra
+      init-args: -backend-config=backend-prod.hcl
+      plan-args: -var-file=prod.tfvars

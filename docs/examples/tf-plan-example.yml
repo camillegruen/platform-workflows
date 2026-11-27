@@ -1,0 +1,24 @@
+# Needs a GitHub environment named "dev" with variables
+# DEPLOYMENT_ROLE_ARN and AWS_REGION.
+name: Terraform plan
+
+on:
+  pull_request:
+    paths: ["infra/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    uses: YOUR_ORG/shared-workflows/.github/workflows/tf-plan.yml@v1
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    secrets: inherit
+    with:
+      environment: dev
+      working-directory: infra
+      init-args: -backend-config=backend-dev.hcl
+      plan-args: -var-file=dev.tfvars

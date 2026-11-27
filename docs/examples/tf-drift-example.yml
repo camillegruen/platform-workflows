@@ -1,0 +1,27 @@
+name: Terraform drift
+
+on:
+  schedule:
+    - cron: "17 13 * * 1-5"  # weekdays 13:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [dev, prod]
+    uses: YOUR_ORG/shared-workflows/.github/workflows/tf-drift.yml@v1
+    permissions:
+      id-token: write
+      contents: read
+      issues: write
+    secrets: inherit
+    with:
+      environment: ${{ matrix.environment }}
+      working-directory: infra
+      init-args: -backend-config=backend-${{ matrix.environment }}.hcl
+      plan-args: -var-file=${{ matrix.environment }}.tfvars

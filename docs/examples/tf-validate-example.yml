@@ -1,0 +1,16 @@
+name: Terraform validate
+
+on:
+  pull_request:
+    paths: ["infra/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    uses: YOUR_ORG/shared-workflows/.github/workflows/tf-validate.yml@v1
+    with:
+      working-directory: infra
+      terraform-version: "1.9.8"
+      tflint-config: .tflint.hcl

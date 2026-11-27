@@ -1,0 +1,86 @@
+name: Build Node Reusable Workflow
+
+permissions:
+  contents: read
+
+on:
+  workflow_call:
+    inputs:
+      node-versions:
+        required: false
+        type: string
+        default: '["20", "22"]'
+        description: JSON array of Node versions.
+      working-directory:
+        required: false
+        type: string
+        default: "."
+      package-manager:
+        required: false
+        type: string
+        default: npm
+        description: npm, pnpm or yarn.
+      run-lint:
+        required: false
+        type: boolean
+        default: true
+      run-build:
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  build-node:
+    name: Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ${{ fromJSON(inputs.node-versions) }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: ${{ inputs.package-manager == 'npm' && 'npm' || '' }}
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+      - name: Enable Corepack (pnpm / yarn)
+        if: inputs.package-manager != 'npm'
+        run: corepack enable
+
+      - name: Install
+        env:
+          PM: ${{ inputs.package-manager }}
+        run: |
+          case "$PM" in
+            npm)  npm ci ;;
+            pnpm) pnpm install --frozen-lockfile ;;
+            yarn) yarn install --immutable ;;
+            *)    echo "::error::Unknown package-manager: $PM"; exit 1 ;;
+          esac
+
+      - name: Lint
+        if: inputs.run-lint
+        env:
+          PM: ${{ inputs.package-manager }}
+        run: $PM run lint --if-present
+
+      - name: Test
+        env:
+          PM: ${{ inputs.package-manager }}
+        run: $PM test
+
+      - name: Build
+        if: inputs.run-build
+        env:
+          PM: ${{ inputs.package-manager }}
+        run: $PM run build --if-present

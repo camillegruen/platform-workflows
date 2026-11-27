@@ -1,0 +1,36 @@
+name: PR Validation Reusable Workflow
+
+on:
+  workflow_call:
+    inputs:
+      validate-title:
+        description: Validate PR title with semantic-pull-request
+        type: boolean
+        required: false
+        default: true
+      auto-assign:
+        description: Auto-assign reviewers (needs .github/auto_assign.yml in the calling repo)
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate-title:
+    name: Validate PR title
+    runs-on: ubuntu-latest
+    if: ${{ inputs.validate-title }}
+    steps:
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50  # v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+  auto-assign:
+    name: Auto assign
+    runs-on: ubuntu-latest
+    if: ${{ inputs.auto-assign }}
+    steps:
+      - uses: kentaro-m/auto-assign-action@0a2c53d3721e4c5cfcce6afd4014aecc337979f6  # v2.0.2

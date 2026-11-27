@@ -1,0 +1,17 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: YOUR_ORG/shared-workflows/.github/workflows/build-python.yml@v1
+    with:
+      python-versions: '["3.12", "3.13"]'
+      install-command: pip install -r requirements.txt -r requirements-dev.txt
+      test-command: pytest -q

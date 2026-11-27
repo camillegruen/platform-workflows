@@ -1,0 +1,8 @@
+addReviewers: true
+addAssignees: author
+reviewers:
+  - teammate-one
+  - teammate-two
+numberOfReviewers: 1
+skipKeywords:
+  - wip

@@ -1,0 +1,75 @@
+name: PR output comment
+description: >
+  Post a file (terraform plan, cdk diff, ...) as a collapsible PR comment.
+  Updates its own previous comment instead of adding a new one each push.
+
+inputs:
+  title:
+    description: Heading, e.g. "Terraform Plan" or "CDK Diff".
+    required: true
+  file:
+    description: Path to the output file (relative to the workspace).
+    required: true
+  outcome:
+    description: Outcome of the step that produced the file (success / failure).
+    required: false
+    default: success
+  language:
+    description: Code-fence language (hcl, diff, text...).
+    required: false
+    default: text
+  key:
+    description: >
+      Extra identity for the comment, so parallel runs (e.g. one per environment)
+      each keep their own comment. Defaults to environment + working directory.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Post or update comment
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
+      env:
+        TITLE: ${{ inputs.title }}
+        FILE: ${{ inputs.file }}
+        OUTCOME: ${{ inputs.outcome }}
+        LANG_: ${{ inputs.language }}
+        KEY: ${{ inputs.key }}
+      with:
+        github-token: ${{ github.token }}
+        script: |
+          const fs = require('fs');
+          const { TITLE, FILE, OUTCOME, LANG_, KEY } = process.env;
+
+          const marker = `<!-- pr-comment:${TITLE}:${KEY} -->`;
+          let output = fs.existsSync(FILE) ? fs.readFileSync(FILE, 'utf8') : '(no output captured)';
+          if (output.length > 60000) {
+            output = output.substring(0, 60000) + '\n... (output truncated due to size)';
+          }
+
+          const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+          const body = `${marker}
+          #### ${TITLE}: \`${OUTCOME}\`${KEY ? ` — \`${KEY}\`` : ''}
+
+          <details${OUTCOME === 'success' ? ' open' : ''}><summary>Show ${TITLE}</summary>
+
+          \`\`\`${LANG_}
+          ${output}
+          \`\`\`
+
+          </details>
+
+          *Pusher: @${context.actor}, Action: \`${context.eventName}\`, Workflow: \`${context.workflow}\`, [Run](${runUrl})*`;
+
+          // Paginate: listComments only returns 30 per page by default
+          const comments = await github.paginate(github.rest.issues.listComments, {
+            ...context.repo, issue_number: context.issue.number, per_page: 100,
+          });
+          const existing = comments.findLast(c => c.body?.includes(marker));
+
+          if (existing) {
+            await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body });
+          } else {
+            await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+          }
